@@ -4,55 +4,71 @@ using UnityEngine.InputSystem;
 public class LaunchProjectile : MonoBehaviour
 {
     [Header("Setup")]
-    public Transform launchPoint;
-    public GameObject projectilePrefab;
-    public Transform target;
+    public Transform    launchPoint;
+    public GameObject   projectilePrefab;
+    public Transform    target;
 
     [Header("Settings")]
-    public float launchVelocity = 60f;
-    public float fireCooldown = 0.5f;
+    public float launchVelocity = 20f;
+    public float fireCooldown   = 1.5f;
 
     private float _nextFireTime;
 
     void Update()
     {
-        bool firePressed = Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
-
-        if (firePressed && Time.time >= _nextFireTime)
+        // Manual fire with Space bar (respects cooldown, requires a target)
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame
+            && Time.time >= _nextFireTime)
             FireMissile();
+    }
+
+    // World-space aim point (may differ from target.position when targeting a renderer center)
+    private Vector3 _targetAimPoint;
+
+    /// <summary>Assigns the attack target and fires one missile immediately.</summary>
+    public void SetTarget(Transform t, Vector3 aimPoint)
+    {
+        target        = t;
+        _targetAimPoint = aimPoint;
+        _nextFireTime = 0f;
+        FireMissile();
+    }
+
+    // Keep old overload for Space-bar manual fire compatibility
+    public void SetTarget(Transform t) => SetTarget(t, t.position);
+
+    /// <summary>Clears the attack target and stops auto-firing.</summary>
+    public void ClearTarget()
+    {
+        target = null;
     }
 
     void FireMissile()
     {
-        if (projectilePrefab == null)
-        {
-            Debug.LogWarning("LaunchProjectile: projectilePrefab non assigné dans l'Inspector !");
-            return;
-        }
+        if (projectilePrefab == null || target == null) return;
 
         _nextFireTime = Time.time + fireCooldown;
 
-        Vector3 origin    = launchPoint != null ? launchPoint.position : transform.position;
-        Vector3 direction = launchPoint != null ? launchPoint.forward  : transform.forward;
-        Vector3 spawnPos  = origin + direction * 2f + Vector3.up * 1f;
-        Quaternion spawnRot = Quaternion.LookRotation(direction) * Quaternion.Euler(90f, 0f, 180f);
+        // Use aim point for accurate direction; missile will track target transform in flight
+        Vector3 origin   = launchPoint != null ? launchPoint.position : transform.position;
+        Vector3 toTarget = (_targetAimPoint - origin).normalized;
+
+        Vector3    spawnPos = origin + Vector3.up * 0.5f;
+        Quaternion spawnRot = Quaternion.LookRotation(toTarget) * Quaternion.Euler(90f, 0f, 180f);
 
         GameObject missile = Instantiate(projectilePrefab, spawnPos, spawnRot);
 
-        // Transmet la cible et démarre le missile
         Projectile proj = missile.GetComponent<Projectile>();
         if (proj != null)
         {
-            if (target != null) proj.target = target;
-            proj.speed = launchVelocity;
-            // Passe la vraie direction de tir (pas la rotation visuelle corrigée)
-            Vector3 dir = new Vector3(direction.x, 0f, direction.z).normalized;
-            if (dir == Vector3.zero) dir = direction.normalized;
-            proj.SetLaunched(dir);
+            proj.target        = target;
+            proj.targetAimPoint = _targetAimPoint;
+            proj.speed         = launchVelocity;
+            proj.SetLaunched(toTarget);
         }
         else
         {
-            Debug.LogError("LaunchProjectile: le prefab missile n'a pas de composant Projectile !");
+            Debug.LogError("LaunchProjectile: missile prefab has no Projectile component!");
         }
     }
 }

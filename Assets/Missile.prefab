@@ -155,7 +155,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Projectile
   life: 5
+  speed: 10
   collisionDelay: 0.15
+  target: {fileID: 0}
+  useArc: 1
+  arcHeight: 20
 --- !u!65 &-3484175632553579769
 BoxCollider:
   m_ObjectHideFlags: 0

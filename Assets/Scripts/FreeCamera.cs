@@ -1,72 +1,122 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+// RTS-style camera (StarCraft 2 controls):
+//   WASD / Arrow keys  — pan
+//   Edge scrolling     — pan when cursor is near screen border
+//   Scroll wheel       — zoom (move along look direction)
+//   Right mouse drag   — rotate
 public class FreeCamera : MonoBehaviour
 {
-    [Header("Vitesse")]
-    public float moveSpeed = 10f;
-    public float fastMultiplier = 3f;   // maintenir Shift pour accélérer
-    public float mouseSensitivity = 0.15f;
+    [Header("Pan")]
+    public float panSpeed       = 20f;
+    public float fastMultiplier = 3f;
+    public bool  edgeScrolling  = true;
+    public float edgeSize       = 30f;   // pixels from screen edge
 
-    private float _pitch; // rotation verticale
-    private float _yaw;   // rotation horizontale
+    [Header("Zoom")]
+    public float zoomSpeed = 0.3f;       // world units per scroll unit
+    public float minHeight = 3f;
+    public float maxHeight = 100f;
+
+    [Header("Rotation")]
+    public float rotateSensitivity = 0.25f;
+
+    private float _yaw;
+    private float _pitch;
 
     void Start()
     {
         _yaw   = transform.eulerAngles.y;
         _pitch = transform.eulerAngles.x;
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible   = false;
+        // Cursor is always free — no locking
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible   = true;
     }
 
     void Update()
     {
-        HandleRotation();
-        HandleMovement();
-
-        // Échap pour libérer le curseur
-        if (Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible   = true;
-        }
-
-        // Clic gauche pour recapturer le curseur
-        if (Mouse.current.leftButton.wasPressedThisFrame && Cursor.lockState == CursorLockMode.None)
-        {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible   = false;
-        }
+        HandlePan();
+        HandleZoom();
+        HandleRotate();
     }
 
-    void HandleRotation()
+    void HandlePan()
     {
-        if (Cursor.lockState != CursorLockMode.Locked) return;
+        if (Keyboard.current == null) return;
 
-        Vector2 mouseDelta = Mouse.current.delta.ReadValue();
-        _yaw   += mouseDelta.x * mouseSensitivity;
-        _pitch -= mouseDelta.y * mouseSensitivity;
-        _pitch  = Mathf.Clamp(_pitch, -89f, 89f);
+        float speed = panSpeed * (Keyboard.current.leftShiftKey.isPressed ? fastMultiplier : 1f);
 
-        transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+        // Panning stays horizontal regardless of camera tilt
+        Quaternion flatRot = Quaternion.Euler(0f, _yaw, 0f);
+        Vector3 forward    = flatRot * Vector3.forward;
+        Vector3 right      = flatRot * Vector3.right;
+
+        Vector3 move = Vector3.zero;
+
+        if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)    move += forward;
+        if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)  move -= forward;
+        if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)  move -= right;
+        if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) move += right;
+
+        if (edgeScrolling && Mouse.current != null)
+        {
+            Vector2 mp = Mouse.current.position.ReadValue();
+            if (mp.x < edgeSize)                 move -= right;
+            if (mp.x > Screen.width  - edgeSize) move += right;
+            if (mp.y < edgeSize)                 move -= forward;
+            if (mp.y > Screen.height - edgeSize) move += forward;
+        }
+
+        if (move.sqrMagnitude > 0f)
+            transform.position += move.normalized * speed * Time.deltaTime;
     }
 
-    void HandleMovement()
+    void HandleZoom()
     {
-        float speed = moveSpeed;
-        if (Keyboard.current.leftShiftKey.isPressed)
-            speed *= fastMultiplier;
+        if (Mouse.current == null) return;
 
-        Vector3 dir = Vector3.zero;
+        float scroll = Mouse.current.scroll.ReadValue().y;
+        if (Mathf.Abs(scroll) < 0.01f) return;
 
-        if (Keyboard.current.zKey.isPressed || Keyboard.current.wKey.isPressed) dir += transform.forward;
-        if (Keyboard.current.sKey.isPressed)                                     dir -= transform.forward;
-        if (Keyboard.current.qKey.isPressed || Keyboard.current.aKey.isPressed) dir -= transform.right;
-        if (Keyboard.current.dKey.isPressed)                                     dir += transform.right;
-        if (Keyboard.current.eKey.isPressed)                                     dir += Vector3.up;
-        if (Keyboard.current.cKey.isPressed)                                     dir -= Vector3.up;
+        Vector3 next = transform.position + transform.forward * (scroll * zoomSpeed);
+        next.y = Mathf.Clamp(next.y, minHeight, maxHeight);
+        transform.position = next;
+    }
 
-        transform.position += dir.normalized * speed * Time.deltaTime;
+    // Minimum mouse movement in pixels before right-click becomes a drag-rotate
+    private const float RotateDragThreshold = 8f;
+    private Vector2 _rightPressStart;
+    private bool    _isRotating;
+
+    void HandleRotate()
+    {
+        if (Mouse.current == null) return;
+
+        if (Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            _rightPressStart = Mouse.current.position.ReadValue();
+            _isRotating      = false;
+        }
+
+        if (Mouse.current.rightButton.isPressed)
+        {
+            if (!_isRotating &&
+                Vector2.Distance(Mouse.current.position.ReadValue(), _rightPressStart) > RotateDragThreshold)
+                _isRotating = true;
+
+            if (_isRotating)
+            {
+                Vector2 delta = Mouse.current.delta.ReadValue();
+                _yaw   += delta.x * rotateSensitivity;
+                _pitch -= delta.y * rotateSensitivity;
+                _pitch  = Mathf.Clamp(_pitch, -89f, 89f);
+                transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+            }
+        }
+
+        if (Mouse.current.rightButton.wasReleasedThisFrame)
+            _isRotating = false;
     }
 }

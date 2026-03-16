@@ -1,5 +1,8 @@
 using UnityEngine;
 
+// RequireComponent ensures that adding Target to an object auto-adds Selectable,
+// so it is immediately clickable without extra manual steps.
+[RequireComponent(typeof(Selectable))]
 public class Target : MonoBehaviour
 {
     [Header("Visuel")]
