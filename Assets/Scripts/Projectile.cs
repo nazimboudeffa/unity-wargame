@@ -108,7 +108,7 @@ public class Projectile : MonoBehaviour
         // Orient missile along its travel direction
         Vector3 dir = (nextPos - pos).normalized;
         if (dir != Vector3.zero)
-            transform.rotation = Quaternion.LookRotation(dir) * Quaternion.Euler(90f, 0f, 180f);
+            transform.rotation = Quaternion.LookRotation(dir) * Quaternion.Euler(90f, 0f, 0f);
 
         if (_t >= 1f)
         {

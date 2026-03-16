@@ -3,7 +3,6 @@ using UnityEngine.InputSystem;
 
 // RTS-style camera (StarCraft 2 controls):
 //   WASD / Arrow keys  — pan
-//   Edge scrolling     — pan when cursor is near screen border
 //   Scroll wheel       — zoom (move along look direction)
 //   Right mouse drag   — rotate
 public class FreeCamera : MonoBehaviour
@@ -11,8 +10,6 @@ public class FreeCamera : MonoBehaviour
     [Header("Pan")]
     public float panSpeed       = 20f;
     public float fastMultiplier = 3f;
-    public bool  edgeScrolling  = true;
-    public float edgeSize       = 30f;   // pixels from screen edge
 
     [Header("Zoom")]
     public float zoomSpeed = 0.3f;       // world units per scroll unit
@@ -59,15 +56,6 @@ public class FreeCamera : MonoBehaviour
         if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed)  move -= forward;
         if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed)  move -= right;
         if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) move += right;
-
-        if (edgeScrolling && Mouse.current != null)
-        {
-            Vector2 mp = Mouse.current.position.ReadValue();
-            if (mp.x < edgeSize)                 move -= right;
-            if (mp.x > Screen.width  - edgeSize) move += right;
-            if (mp.y < edgeSize)                 move -= forward;
-            if (mp.y > Screen.height - edgeSize) move += forward;
-        }
 
         if (move.sqrMagnitude > 0f)
             transform.position += move.normalized * speed * Time.deltaTime;
