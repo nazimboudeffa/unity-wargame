@@ -2,14 +2,14 @@
 using UnityEngine.InputSystem;
 
 // SC2-style controls:
-//   Left click on friendly unit (has UnitMovement)       -- select it
-//   Right click on enemy (has Selectable, no UnitMovement) -- attack order (auto-fires)
-//   Right click on ground                                -- move order
-//   Escape                                               -- cancel selection & attack
+//   Left click on friendly unit (UnitHealth.IsPlayerUnit=true)  -- select it
+//   Right click on enemy (UnitHealth.IsPlayerUnit=false)        -- attack order (auto-fires)
+//   Right click on ground                                       -- move order
+//   Escape                                                      -- cancel selection & attack
 //
 // SETUP:
-//   - Friendly units: add Selectable + UnitMovement + LaunchProjectile
-//   - Enemies / targets: add Selectable (+ Collider)
+//   - Friendly units: Selectable + UnitMovement + LaunchProjectile + UnitHealth(isPlayerUnit=true)
+//   - Enemies: Selectable + UnitMovement + EnemyAI + UnitHealth(isPlayerUnit=false) + Collider
 public class TargetSelector : MonoBehaviour
 {
     [Header("Setup")]
@@ -46,17 +46,21 @@ public class TargetSelector : MonoBehaviour
         if (Physics.Raycast(ray, out RaycastHit info))
         {
             Selectable hit = info.collider.GetComponentInParent<Selectable>();
-            if (hit != null && hit.transform.root.GetComponentInChildren<UnitMovement>() != null)
+            if (hit != null)
             {
-                if (hit == _selectedUnit) return;
-                DeselectUnit();
-                _selectedUnit = hit;
-                _unitLauncher = hit.transform.root.GetComponentInChildren<LaunchProjectile>();
-                _selectedUnit.SetSelected(true);
-                Debug.Log(_unitLauncher != null
-                    ? $"[Selector] Unit selected: {_selectedUnit.name} (launcher found)"
-                    : $"[Selector] Unit selected: {_selectedUnit.name} (WARNING: no LaunchProjectile found on this unit)");
-                return;
+                UnitHealth health = hit.transform.root.GetComponentInChildren<UnitHealth>();
+                if (health != null && health.isPlayerUnit)
+                {
+                    if (hit == _selectedUnit) return;
+                    DeselectUnit();
+                    _selectedUnit = hit;
+                    _unitLauncher = hit.transform.root.GetComponentInChildren<LaunchProjectile>();
+                    _selectedUnit.SetSelected(true);
+                    Debug.Log(_unitLauncher != null
+                        ? $"[Selector] Unit selected: {_selectedUnit.name} (launcher found)"
+                        : $"[Selector] Unit selected: {_selectedUnit.name} (WARNING: no LaunchProjectile found on this unit)");
+                    return;
+                }
             }
         }
 
@@ -81,8 +85,10 @@ public class TargetSelector : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit info)) return;
 
         Selectable hitSel = info.collider.GetComponentInParent<Selectable>();
+        UnitHealth hitHealth = hitSel != null ? hitSel.transform.root.GetComponentInChildren<UnitHealth>() : null;
         bool isEnemy = hitSel != null
-                    && hitSel.transform.root.GetComponentInChildren<UnitMovement>() == null
+                    && hitHealth != null
+                    && !hitHealth.isPlayerUnit
                     && hitSel != _selectedUnit;
 
         if (isEnemy)

@@ -6,6 +6,7 @@ public class Projectile : MonoBehaviour
     public float life             = 30f;
     public float speed            = 20f;
     public float collisionDelay   = 0.15f;
+    public float damage           = 25f;  // Dégâts infligés
 
     [Header("Guidage")]
     public Transform target;
@@ -58,9 +59,12 @@ public class Projectile : MonoBehaviour
         _launched = true;
         _startPos = transform.position;
 
+        Debug.Log($"[Projectile] SetLaunched - StartPos: {_startPos}, Target: {(target != null ? target.name : "NULL")}, TargetAimPoint: {targetAimPoint}, Direction: {direction}");
+
         if (useArc && target != null)
         {
             _targetSnapshot = targetAimPoint != Vector3.zero ? targetAimPoint : target.position;
+            Debug.Log($"[Projectile] UseArc=true - TargetSnapshot initialisé à: {_targetSnapshot}");
             // Arc height computed once from horizontal distance at launch
             float hDist    = Vector3.Distance(
                 new Vector3(_startPos.x, 0f, _startPos.z),
@@ -94,7 +98,12 @@ public class Projectile : MonoBehaviour
 
         // Always track the target so the arc endpoint stays locked onto it
         if (target != null)
-            _targetSnapshot = target.position;
+        {
+            // Recalculate aim point to track moving targets (use renderer center if available)
+            Renderer targetRend = target.GetComponentInChildren<Renderer>();
+            Vector3 currentAimPoint = targetRend != null ? targetRend.bounds.center : target.position;
+            _targetSnapshot = currentAimPoint;
+        }
 
         // Apex is fixed — only the endpoint moves to track the target
         Vector3 apex = _apex;
@@ -146,6 +155,29 @@ public class Projectile : MonoBehaviour
             col.enabled = true;
     }
 
-    void OnCollisionEnter(Collision collision) => Destroy(gameObject);
-    void OnTriggerEnter(Collider other)        => Destroy(gameObject);
+    void OnCollisionEnter(Collision collision)
+    {
+        ApplyDamage(collision.gameObject);
+        Destroy(gameObject);
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        ApplyDamage(other.gameObject);
+        Destroy(gameObject);
+    }
+
+    void ApplyDamage(GameObject hitObject)
+    {
+        // Chercher UnitHealth sur l'objet touché ou ses parents
+        UnitHealth health = hitObject.GetComponent<UnitHealth>();
+        if (health == null)
+            health = hitObject.GetComponentInParent<UnitHealth>();
+
+        if (health != null)
+        {
+            health.TakeDamage(damage);
+            Debug.Log($"[Projectile] Impact sur {hitObject.name}! Dégâts: {damage}");
+        }
+    }
 }
