@@ -16,15 +16,11 @@ public class ShopUI : MonoBehaviour
     public GameObject defeatPanel;
 
     [Header("Boutons d'achat d'unités")]
-    public Button buyLightTankButton;
-    public Button buyMediumTankButton;
-    public Button buyHeavyTankButton;
+    public Button buyTankButton;
     public Button buyMissileLauncherButton;
 
     [Header("Textes des prix")]
-    public TextMeshProUGUI lightTankPriceText;
-    public TextMeshProUGUI mediumTankPriceText;
-    public TextMeshProUGUI heavyTankPriceText;
+    public TextMeshProUGUI tankPriceText;
     public TextMeshProUGUI missileLauncherPriceText;
 
     [Header("Placement des unités")]
@@ -51,7 +47,6 @@ public class ShopUI : MonoBehaviour
 
         if (WaveManager.Instance != null)
         {
-            WaveManager.Instance.OnWaveStarted += UpdateWaveInfo;
             WaveManager.Instance.OnEnemyCountChanged += UpdateEnemyCount;
         }
 
@@ -78,17 +73,29 @@ public class ShopUI : MonoBehaviour
 
     void SetupUnitButtons()
     {
-        if (buyLightTankButton != null)
-            buyLightTankButton.onClick.AddListener(() => BuyUnit(UnitData.UnitType.LightTank));
+        if (GameEconomyManager.Instance == null) return;
 
-        if (buyMediumTankButton != null)
-            buyMediumTankButton.onClick.AddListener(() => BuyUnit(UnitData.UnitType.MediumTank));
-
-        if (buyHeavyTankButton != null)
-            buyHeavyTankButton.onClick.AddListener(() => BuyUnit(UnitData.UnitType.HeavyTank));
+        if (buyTankButton != null)
+        {
+            buyTankButton.onClick.AddListener(() => BuyUnit(UnitData.UnitType.Tank));
+            // Désactiver si pas de données configurées
+            if (GameEconomyManager.Instance.GetUnitData(UnitData.UnitType.Tank) == null)
+            {
+                buyTankButton.interactable = false;
+                Debug.LogWarning("[ShopUI] Tank n'est pas configuré dans GameEconomyManager - bouton désactivé");
+            }
+        }
 
         if (buyMissileLauncherButton != null)
+        {
             buyMissileLauncherButton.onClick.AddListener(() => BuyUnit(UnitData.UnitType.MissileLauncher));
+            // Désactiver si pas de données configurées
+            if (GameEconomyManager.Instance.GetUnitData(UnitData.UnitType.MissileLauncher) == null)
+            {
+                buyMissileLauncherButton.interactable = false;
+                Debug.LogWarning("[ShopUI] MissileLauncher n'est pas configuré dans GameEconomyManager - bouton désactivé");
+            }
+        }
     }
 
     void SetupWaveButton()
@@ -145,9 +152,25 @@ public class ShopUI : MonoBehaviour
             }
             
             Debug.Log($"[ShopUI DEBUG] spawnedUnit créé: {spawnedUnit.name}");
+            Debug.Log($"[ShopUI DEBUG] Position initiale: {spawnedUnit.transform.position}");
+            Debug.Log($"[ShopUI DEBUG] Scale: {spawnedUnit.transform.localScale}");
+            Debug.Log($"[ShopUI DEBUG] Active: {spawnedUnit.activeSelf}");
             
             Vector3 spawnPos = unitSpawnPoint.position + Vector3.right * (_unitsSpawned * spawnSpacing);
             spawnedUnit.transform.position = spawnPos;
+            Debug.Log($"[ShopUI DEBUG] Nouvelle position: {spawnPos}");
+            
+            // S'assurer que l'unité est active et visible
+            spawnedUnit.SetActive(true);
+            
+            // Vérifier les composants
+            var renderer = spawnedUnit.GetComponentInChildren<Renderer>();
+            Debug.Log($"[ShopUI DEBUG] Renderer trouvé: {renderer != null}");
+            if (renderer != null)
+            {
+                Debug.Log($"[ShopUI DEBUG] Renderer enabled: {renderer.enabled}");
+            }
+            
             _unitsSpawned++;
 
             Debug.Log($"[ShopUI DEBUG] ✅ {unitData.displayName} SPAWNÉ à {spawnPos}!");
@@ -162,7 +185,7 @@ public class ShopUI : MonoBehaviour
     {
         if (TacticalDefenseGameManager.Instance != null)
         {
-            TacticalDefenseGameManager.Instance.StartCombatPhase();
+            TacticalDefenseGameManager.Instance.StartGame();
         }
     }
 
@@ -215,19 +238,11 @@ public class ShopUI : MonoBehaviour
         }
     }
 
-    void UpdateWaveInfo(int currentWave, int totalWaves)
+    void UpdateEnemyCount(int remaining)
     {
         if (waveInfoText != null)
         {
-            waveInfoText.text = $"Vague {currentWave}/{totalWaves}";
-        }
-    }
-
-    void UpdateEnemyCount(int remaining)
-    {
-        if (waveInfoText != null && WaveManager.Instance != null)
-        {
-            waveInfoText.text = $"Vague {WaveManager.Instance.CurrentWaveIndex + 1} - Ennemis: {remaining}";
+            waveInfoText.text = $"Ennemis actifs: {remaining}";
         }
     }
 
@@ -235,9 +250,7 @@ public class ShopUI : MonoBehaviour
     {
         if (GameEconomyManager.Instance == null) return;
 
-        UpdateUnitPriceText(lightTankPriceText, UnitData.UnitType.LightTank);
-        UpdateUnitPriceText(mediumTankPriceText, UnitData.UnitType.MediumTank);
-        UpdateUnitPriceText(heavyTankPriceText, UnitData.UnitType.HeavyTank);
+        UpdateUnitPriceText(tankPriceText, UnitData.UnitType.Tank);
         UpdateUnitPriceText(missileLauncherPriceText, UnitData.UnitType.MissileLauncher);
 
         // Prix des munitions
@@ -258,6 +271,10 @@ public class ShopUI : MonoBehaviour
         {
             textField.text = $"${data.purchaseCost:N0}";
         }
+        else
+        {
+            textField.text = "N/A";
+        }
     }
 
     void OnGameStateChanged(TacticalDefenseGameManager.GameState state)
@@ -268,12 +285,10 @@ public class ShopUI : MonoBehaviour
             shopPanel.SetActive(state == TacticalDefenseGameManager.GameState.BuyPhase);
         }
 
-        // Activer/désactiver le bouton de démarrage de vague
+        // Activer/désactiver le bouton de démarrage du jeu
         if (startWaveButton != null)
         {
-            startWaveButton.interactable = state == TacticalDefenseGameManager.GameState.BuyPhase 
-                && WaveManager.Instance != null 
-                && WaveManager.Instance.CanStartWave;
+            startWaveButton.interactable = state == TacticalDefenseGameManager.GameState.BuyPhase;
         }
     }
 

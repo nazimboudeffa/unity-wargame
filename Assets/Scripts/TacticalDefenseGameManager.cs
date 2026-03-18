@@ -11,8 +11,8 @@ public class TacticalDefenseGameManager : MonoBehaviour
     public enum GameState
     {
         MainMenu,
-        BuyPhase,      // Phase d'achat entre les vagues
-        CombatPhase,   // Vague en cours
+        BuyPhase,      // Phase d'achat initiale
+        Playing,       // Jeu en cours (continu)
         Victory,
         Defeat
     }
@@ -21,8 +21,8 @@ public class TacticalDefenseGameManager : MonoBehaviour
     [SerializeField] private GameState _currentState = GameState.MainMenu;
 
     [Header("Paramètres")]
-    public float buyPhaseDuration = 30f;  // Temps pour acheter (désactivé par défaut, contrôle manuel)
-    public bool autoStartWaves = false;   // Démarrage automatique des vagues
+    public float buyPhaseDuration = 30f;  // Temps pour acheter avant le début
+    public bool autoStartGame = false;    // Démarrage automatique après le temps d'achat
 
     private float _buyPhaseTimer;
 
@@ -45,36 +45,26 @@ public class TacticalDefenseGameManager : MonoBehaviour
 
     void Start()
     {
-        // S'abonner aux events des autres managers
-        if (WaveManager.Instance != null)
-        {
-            WaveManager.Instance.OnWaveStarted += OnWaveStarted;
-            WaveManager.Instance.OnWaveCompleted += OnWaveCompleted;
-            WaveManager.Instance.OnAllWavesCompleted += OnAllWavesCompleted;
-        }
-
         // Commencer en phase d'achat
         SetGameState(GameState.BuyPhase);
     }
 
     void Update()
     {
-        switch (_currentState)
+        if (_currentState == GameState.BuyPhase)
         {
-            case GameState.BuyPhase:
-                UpdateBuyPhase();
-                break;
+            UpdateBuyPhase();
         }
     }
 
     void UpdateBuyPhase()
     {
-        if (!autoStartWaves) return;
+        if (!autoStartGame) return;
 
         _buyPhaseTimer -= Time.deltaTime;
-        if (_buyPhaseTimer <= 0f && WaveManager.Instance != null)
+        if (_buyPhaseTimer <= 0f)
         {
-            StartCombatPhase();
+            StartGame();
         }
     }
 
@@ -92,11 +82,16 @@ public class TacticalDefenseGameManager : MonoBehaviour
         {
             case GameState.BuyPhase:
                 _buyPhaseTimer = buyPhaseDuration;
+                Debug.Log($"=== PHASE D'ACHAT - {buyPhaseDuration}s pour préparer vos défenses ===");
+                break;
+
+            case GameState.Playing:
+                Debug.Log("=== LE JEU COMMENCE! ===");
                 break;
 
             case GameState.Victory:
                 OnVictory?.Invoke();
-                Debug.Log("=== VICTOIRE! TOUTES LES VAGUES SONT TERMINÉES! ===");
+                Debug.Log("=== VICTOIRE! ===");
                 break;
 
             case GameState.Defeat:
@@ -106,39 +101,40 @@ public class TacticalDefenseGameManager : MonoBehaviour
         }
     }
 
-    /// <summary>Démarre la phase de combat (lance la vague)</summary>
-    public void StartCombatPhase()
+    /// <summary>Démarre le jeu après la phase d'achat</summary>
+    public void StartGame()
     {
-        if (WaveManager.Instance == null || !WaveManager.Instance.CanStartWave)
+        if (_currentState != GameState.BuyPhase)
         {
-            Debug.LogWarning("[GameManager] Impossible de démarrer une vague maintenant.");
+            Debug.LogWarning("[GameManager] Le jeu ne peut être démarré qu'en phase d'achat.");
             return;
         }
 
-        SetGameState(GameState.CombatPhase);
-        WaveManager.Instance.StartNextWave();
+        SetGameState(GameState.Playing);
+        
+        // Démarrer le spawn continu d'ennemis
+        if (WaveManager.Instance != null)
+        {
+            WaveManager.Instance.StartSpawning();
+        }
     }
 
-    void OnWaveStarted(int currentWave, int totalWaves)
+    /// <summary>Retourne le temps restant en phase d'achat</summary>
+    public float GetBuyPhaseTimeRemaining()
     {
-        Debug.Log($"[GameManager] Vague {currentWave}/{totalWaves} démarrée!");
-    }
-
-    void OnWaveCompleted(int waveIndex)
-    {
-        Debug.Log($"[GameManager] Vague {waveIndex + 1} terminée! Retour en phase d'achat.");
-        SetGameState(GameState.BuyPhase);
-    }
-
-    void OnAllWavesCompleted()
-    {
-        SetGameState(GameState.Victory);
+        return _buyPhaseTimer;
     }
 
     /// <summary>Appelé quand la base du joueur est détruite</summary>
     public void OnPlayerBaseDestroyed()
     {
         SetGameState(GameState.Defeat);
+    }
+
+    /// <summary>Appelé pour déclencher la victoire manuellement</summary>
+    public void TriggerVictory()
+    {
+        SetGameState(GameState.Victory);
     }
 
     /// <summary>Redémarre le jeu</summary>
@@ -162,15 +158,5 @@ public class TacticalDefenseGameManager : MonoBehaviour
 #else
         Application.Quit();
 #endif
-    }
-
-    void OnDestroy()
-    {
-        if (WaveManager.Instance != null)
-        {
-            WaveManager.Instance.OnWaveStarted -= OnWaveStarted;
-            WaveManager.Instance.OnWaveCompleted -= OnWaveCompleted;
-            WaveManager.Instance.OnAllWavesCompleted -= OnAllWavesCompleted;
-        }
     }
 }

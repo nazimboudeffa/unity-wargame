@@ -8,9 +8,7 @@ public class UnitData
 {
     public enum UnitType
     {
-        LightTank,
-        MediumTank,
-        HeavyTank,
+        Tank,
         MissileLauncher
     }
 

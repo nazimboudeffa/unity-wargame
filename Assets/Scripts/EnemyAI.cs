@@ -27,6 +27,15 @@ public class EnemyAI : MonoBehaviour
         if (_movement == null)
             _movement = GetComponentInChildren<UnitMovement>();
 
+        if (_movement == null)
+        {
+            Debug.LogError($"[EnemyAI] {gameObject.name} n'a pas de composant UnitMovement! L'ennemi ne pourra pas bouger.");
+        }
+        else
+        {
+            Debug.Log($"[EnemyAI] {gameObject.name} - UnitMovement trouvé");
+        }
+
         _launcher = GetComponent<LaunchProjectile>();
         if (_launcher == null)
             _launcher = GetComponentInChildren<LaunchProjectile>();
@@ -36,15 +45,25 @@ public class EnemyAI : MonoBehaviour
         {
             GameObject baseObj = GameObject.FindGameObjectWithTag("PlayerBase");
             if (baseObj != null)
+            {
                 playerBase = baseObj.transform;
+                Debug.Log($"[EnemyAI] {gameObject.name} a trouvé la base du joueur: {playerBase.name}");
+            }
             else
-                Debug.LogWarning($"[EnemyAI] {gameObject.name} ne trouve pas la base du joueur! Tag 'PlayerBase' manquant?");
+            {
+                Debug.LogError($"[EnemyAI] {gameObject.name} ne trouve pas la base du joueur! Tag 'PlayerBase' manquant?");
+            }
         }
 
         // Commencer le mouvement vers la base
         if (moveToBase && playerBase != null && _movement != null)
         {
+            Debug.Log($"[EnemyAI] {gameObject.name} commence à se déplacer vers {playerBase.name} à {playerBase.position}");
             _movement.MoveTo(playerBase.position);
+        }
+        else
+        {
+            Debug.LogWarning($"[EnemyAI] {gameObject.name} ne peut pas démarrer le mouvement - moveToBase={moveToBase}, playerBase={playerBase != null}, movement={_movement != null}");
         }
     }
 

@@ -2,48 +2,35 @@ using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
-/// Gère les vagues d'ennemis : spawn, progression, difficulté
+/// Gère le spawn continu d'ennemis
 /// </summary>
 public class WaveManager : MonoBehaviour
 {
     public static WaveManager Instance { get; private set; }
 
-    [System.Serializable]
-    public class Wave
-    {
-        public string waveName = "Vague 1";
-        public int enemyCount = 5;
-        public float spawnInterval = 2f;  // Délai entre chaque spawn
-        public GameObject[] enemyPrefabs;  // Types d'ennemis pour cette vague
-        public float enemyHealthMultiplier = 1f; // Multiplie la santé de base
-    }
-
-    [Header("Configuration des vagues")]
-    public List<Wave> waves = new List<Wave>();
-    public int totalWavesToWin = 10;
+    [Header("Configuration des ennemis")]
+    public GameObject[] enemyPrefabs;  // Types d'ennemis disponibles
+    public float spawnInterval = 2f;  // Délai entre chaque spawn
+    public float enemyHealthMultiplier = 1f; // Multiplie la santé de base
+    public int maxActiveEnemies = 10; // Limite d'ennemis actifs simultanément
 
     [Header("Spawn")]
-    public Transform[] spawnPoints;
-    public float delayBetweenWaves = 15f; // Temps pour acheter entre les vagues
+    public Transform spawnPoint;  // Point de spawn unique pour les ennemis
+    public float spawnSpacing = 3f; // Espacement entre les ennemis spawnés
 
     [Header("État")]
-    [SerializeField] private int _currentWaveIndex = 0;
     [SerializeField] private int _enemiesRemaining = 0;
-    [SerializeField] private bool _waveInProgress = false;
     [SerializeField] private bool _isSpawning = false;
 
     private List<GameObject> _activeEnemies = new List<GameObject>();
+    private float _spawnTimer = 0f;
+    private int _enemiesSpawned = 0; // Compteur pour l'espacement
 
     // Events
-    public System.Action<int, int> OnWaveStarted; // (currentWave, totalWaves)
-    public System.Action<int> OnWaveCompleted;    // (waveIndex)
-    public System.Action OnAllWavesCompleted;
     public System.Action<int> OnEnemyCountChanged; // (remaining)
 
-    public int CurrentWaveIndex => _currentWaveIndex;
     public int EnemiesRemaining => _enemiesRemaining;
-    public bool IsWaveInProgress => _waveInProgress;
-    public bool CanStartWave => !_waveInProgress && !_isSpawning && _currentWaveIndex < waves.Count;
+    public bool IsSpawning => _isSpawning;
 
     void Awake()
     {
@@ -57,78 +44,77 @@ public class WaveManager : MonoBehaviour
 
     void Start()
     {
-        if (spawnPoints == null || spawnPoints.Length == 0)
+        if (spawnPoint == null)
         {
             Debug.LogError("[WaveManager] Aucun spawn point défini!");
         }
 
-        // Générer des vagues par défaut si la liste est vide
-        if (waves.Count == 0)
+        if (enemyPrefabs == null || enemyPrefabs.Length == 0)
         {
-            GenerateDefaultWaves();
+            Debug.LogError("[WaveManager] Aucun prefab d'ennemi défini!");
         }
     }
 
-    /// <summary>Démarre la prochaine vague (appelé par le GameManager ou UI)</summary>
-    public void StartNextWave()
+    void Update()
     {
-        if (!CanStartWave)
+        if (!_isSpawning) return;
+
+        // Spawn automatique si sous la limite
+        if (_activeEnemies.Count < maxActiveEnemies)
         {
-            Debug.LogWarning("[WaveManager] Impossible de démarrer une nouvelle vague maintenant.");
+            _spawnTimer -= Time.deltaTime;
+            if (_spawnTimer <= 0f)
+            {
+                SpawnEnemy();
+                _spawnTimer = spawnInterval;
+            }
+        }
+    }
+
+    /// <summary>Démarre le spawn continu d'ennemis</summary>
+    public void StartSpawning()
+    {
+        if (_isSpawning)
+        {
+            Debug.LogWarning("[WaveManager] Le spawn est déjà actif.");
             return;
-        }
-
-        StartCoroutine(SpawnWave(_currentWaveIndex));
-    }
-
-    private System.Collections.IEnumerator SpawnWave(int waveIndex)
-    {
-        if (waveIndex >= waves.Count)
-        {
-            Debug.LogError($"[WaveManager] Index de vague invalide: {waveIndex}");
-            yield break;
         }
 
         _isSpawning = true;
-        _waveInProgress = true;
-        
-        Wave wave = waves[waveIndex];
-        _enemiesRemaining = wave.enemyCount;
-
-        Debug.Log($"[WaveManager] === {wave.waveName} commence! {wave.enemyCount} ennemis ===");
-        OnWaveStarted?.Invoke(_currentWaveIndex + 1, totalWavesToWin);
-        OnEnemyCountChanged?.Invoke(_enemiesRemaining);
-
-        // Spawn tous les ennemis de la vague
-        for (int i = 0; i < wave.enemyCount; i++)
-        {
-            SpawnEnemy(wave);
-            yield return new WaitForSeconds(wave.spawnInterval);
-        }
-
-        _isSpawning = false;
-        Debug.Log($"[WaveManager] Tous les ennemis de {wave.waveName} sont spawned. En attente de leur élimination...");
+        _spawnTimer = 0f;
+        Debug.Log("[WaveManager] === Spawn d'ennemis démarré! ===");
     }
 
-    void SpawnEnemy(Wave wave)
+    /// <summary>Arrête le spawn continu d'ennemis</summary>
+    public void StopSpawning()
     {
-        if (wave.enemyPrefabs == null || wave.enemyPrefabs.Length == 0)
+        _isSpawning = false;
+        Debug.Log("[WaveManager] === Spawn d'ennemis arrêté! ===");
+    }
+
+    void SpawnEnemy()
+    {
+        if (enemyPrefabs == null || enemyPrefabs.Length == 0)
         {
-            Debug.LogError("[WaveManager] Aucun prefab d'ennemi dans cette vague!");
+            Debug.LogError("[WaveManager] Aucun prefab d'ennemi!");
             return;
         }
 
-        // Choisir un prefab aléatoire et un spawn point aléatoire
-        GameObject enemyPrefab = wave.enemyPrefabs[Random.Range(0, wave.enemyPrefabs.Length)];
-        Transform spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+        // Choisir un prefab aléatoire
+        GameObject enemyPrefab = enemyPrefabs[Random.Range(0, enemyPrefabs.Length)];
 
-        GameObject enemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
+        // Calculer la position avec espacement
+        Vector3 spawnPos = spawnPoint.position + Vector3.right * (_enemiesSpawned * spawnSpacing);
+        GameObject enemy = Instantiate(enemyPrefab, spawnPos, spawnPoint.rotation);
+        _enemiesSpawned++;
+
+        Debug.Log($"[WaveManager] Ennemi spawné: {enemy.name} à position {spawnPos}");
 
         // Appliquer le multiplicateur de santé
         UnitHealth health = enemy.GetComponent<UnitHealth>();
         if (health != null)
         {
-            health.maxHealth *= wave.enemyHealthMultiplier;
+            health.maxHealth *= enemyHealthMultiplier;
             health.currentHealth = health.maxHealth;
             health.isPlayerUnit = false; // C'est un ennemi
 
@@ -136,7 +122,25 @@ public class WaveManager : MonoBehaviour
             health.OnDeath += () => OnEnemyKilled(enemy);
         }
 
+        // Vérifier que l'ennemi a les composants nécessaires au mouvement
+        EnemyAI ai = enemy.GetComponent<EnemyAI>();
+        UnitMovement movement = enemy.GetComponent<UnitMovement>();
+        
+        if (ai == null)
+        {
+            Debug.LogWarning($"[WaveManager] {enemy.name} n'a pas de composant EnemyAI, ajout automatique...");
+            ai = enemy.AddComponent<EnemyAI>();
+        }
+        
+        if (movement == null)
+        {
+            Debug.LogWarning($"[WaveManager] {enemy.name} n'a pas de composant UnitMovement, ajout automatique...");
+            movement = enemy.AddComponent<UnitMovement>();
+        }
+
         _activeEnemies.Add(enemy);
+        _enemiesRemaining = _activeEnemies.Count;
+        OnEnemyCountChanged?.Invoke(_enemiesRemaining);
     }
 
     void OnEnemyKilled(GameObject enemy)
@@ -146,51 +150,10 @@ public class WaveManager : MonoBehaviour
             _activeEnemies.Remove(enemy);
         }
 
-        _enemiesRemaining--;
+        _enemiesRemaining = _activeEnemies.Count;
         OnEnemyCountChanged?.Invoke(_enemiesRemaining);
 
         Debug.Log($"[WaveManager] Ennemi éliminé! Restants: {_enemiesRemaining}");
-
-        // Vérifier si la vague est terminée
-        if (_enemiesRemaining <= 0 && _waveInProgress)
-        {
-            WaveCompleted();
-        }
-    }
-
-    void WaveCompleted()
-    {
-        _waveInProgress = false;
-        
-        Debug.Log($"[WaveManager] === Vague {_currentWaveIndex + 1} terminée! ===");
-        
-        // Donner la récompense
-        if (GameEconomyManager.Instance != null)
-        {
-            GameEconomyManager.Instance.RewardWaveCompleted(_currentWaveIndex);
-        }
-
-        OnWaveCompleted?.Invoke(_currentWaveIndex);
-
-        _currentWaveIndex++;
-
-        // Vérifier la victoire
-        if (_currentWaveIndex >= totalWavesToWin)
-        {
-            Debug.Log("[WaveManager] === TOUTES LES VAGUES TERMINÉES! VICTOIRE! ===");
-            OnAllWavesCompleted?.Invoke();
-        }
-        else
-        {
-            Debug.Log($"[WaveManager] Prochaine vague dans {delayBetweenWaves}s. Utilisez ce temps pour acheter des unités!");
-        }
-    }
-
-    /// <summary>Génère des vagues par défaut pour tester</summary>
-    void GenerateDefaultWaves()
-    {
-        Debug.LogWarning("[WaveManager] Génération de vagues par défaut (mode démo).");
-        // Les vagues seront configurées dans l'Inspector avec les vrais prefabs
     }
 
     /// <summary>Nettoyage manuel de tous les ennemis (pour reset)</summary>
@@ -203,14 +166,15 @@ public class WaveManager : MonoBehaviour
         }
         _activeEnemies.Clear();
         _enemiesRemaining = 0;
+        _enemiesSpawned = 0; // Réinitialiser l'espacement
+        OnEnemyCountChanged?.Invoke(_enemiesRemaining);
     }
 
     /// <summary>Reset le manager pour recommencer</summary>
-    public void ResetWaves()
+    public void Reset()
     {
         ClearAllEnemies();
-        _currentWaveIndex = 0;
-        _waveInProgress = false;
         _isSpawning = false;
+        _enemiesSpawned = 0; // Réinitialiser l'espacement
     }
 }

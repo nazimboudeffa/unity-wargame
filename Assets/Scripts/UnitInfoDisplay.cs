@@ -33,10 +33,9 @@ public class UnitInfoDisplay : MonoBehaviour
         if (ammoInventory == null)
             ammoInventory = GetComponent<AmmunitionInventory>();
 
-        // Vérifier que le texte est assigné
+        // Si pas de texte assigné, désactiver silencieusement
         if (infoText == null)
         {
-            Debug.LogError($"[UnitInfoDisplay] ⚠️ 'Info Text' n'est pas assigné sur {gameObject.name}! Créez un Canvas enfant avec un TextMeshProUGUI et assignez-le dans l'Inspector.");
             enabled = false;
             return;
         }

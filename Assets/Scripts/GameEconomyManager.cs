@@ -20,7 +20,6 @@ public class GameEconomyManager : MonoBehaviour
 
     [Header("Rewards")]
     public int rewardPerEnemyKilled = 10000;
-    public int[] waveCompletionBonus = { 25000, 30000, 40000, 50000, 60000, 75000, 85000, 95000, 100000, 150000 };
 
     public int CurrentBudget => _currentBudget;
 
@@ -100,7 +99,8 @@ public class GameEconomyManager : MonoBehaviour
             health.maxHealth = unitData.maxHealth;
             health.currentHealth = unitData.maxHealth;
             health.armor = unitData.armor;
-            Debug.Log($"[Economy DEBUG] Santé initialisée: {unitData.maxHealth} HP, {unitData.armor} armor");
+            health.isPlayerUnit = true; // S'assurer que c'est une unité du joueur
+            Debug.Log($"[Economy DEBUG] Santé initialisée: {unitData.maxHealth} HP, {unitData.armor} armor, isPlayerUnit={health.isPlayerUnit}");
         }
         else
         {
@@ -155,17 +155,6 @@ public class GameEconomyManager : MonoBehaviour
     public void RewardEnemyKilled()
     {
         AddFunds(rewardPerEnemyKilled);
-    }
-
-    /// <summary>Récompense de fin de vague</summary>
-    public void RewardWaveCompleted(int waveIndex)
-    {
-        if (waveIndex >= 0 && waveIndex < waveCompletionBonus.Length)
-        {
-            int bonus = waveCompletionBonus[waveIndex];
-            AddFunds(bonus);
-            Debug.Log($"[Economy] Bonus de vague {waveIndex + 1}: ${bonus}");
-        }
     }
 
     /// <summary>Trouve une UnitData par type</summary>
